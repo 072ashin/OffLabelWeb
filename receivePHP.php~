@@ -1,0 +1,35 @@
+<?php
+/**
+ * Created by PhpStorm.
+ * User: Fan Gao
+ * Date: 1/10/2018
+ * Time: 2:48 PM
+ */
+// $parameters = $_POST['parameters'];
+// $centroids = $_POST['centroids'];
+
+// $centroidsFile = fopen("fitting/centroids.txt", "a") or die("Unable to open file!");
+// file_put_contents("fitting/parameters.txt", implode(",",$parameters));
+// foreach ($centroids as $key => $value) {
+// 	foreach ($centroids[$key] as $subkey => $subvalue) {
+// 		 fwrite($centroidsFile, $subvalue.",");
+// 	}
+// 	fwrite($centroidsFile, "\n");
+// } 
+
+shell_exec("cd /opt/lampp/htdocs/OffLabelWeb/fitting/");
+
+$command = "/usr/local/MATLAB/R2017a/bin/matlab -nodisplay -nojvm -r readPrimitive";
+//$command = "/usr/local/MATLAB/R2017a/bin/matlab -nodisplay -nojvm -r run('readPrimitive.m')";
+$output = shell_exec($command);
+echo $output;
+//echo substr($output, 392);
+// var_dump($output);
+// Open the file
+//$resultFile = @fopen("/opt/lampp/htdocs/OffLabelWeb/fitting/resultFit.txt", 'r') or die("Unable to open file!");
+//if ($resultFile) {
+//   $data = explode("\n", fread($resultFile, filesize($filename)));
+//}
+//echo $data;
+//return $data;
+?>

@@ -1,0 +1,26 @@
+function [projection, projectedNormals] = projectToTorus(primitive, points)
+    alpha = rand(1) / (2 * pi) - pi;
+    beta = rand(1) / (2 * pi) - pi;
+    gamma = rand(1) / (2 * pi) - pi;
+    shift_vector = rand(1, 3) * 3;
+    rx = [1, 0, 0; 0, cos(alpha), -sin(alpha); 0, sin(alpha), cos(alpha)];
+    ry = [cos(beta), 0, sin(beta); 0, 1, 0; -sin(beta), 0, cos(beta)];
+    rz = [cos(gamma), -sin(gamma), 0; sin(gamma), cos(gamma), 0; 0 0 1];
+    rotation_matrix = rx * ry * rz;
+    m = size(points, 1);
+    points = points * rotation_matrix' + repmat(shift_vector, m, 1);
+    a = primitive(3 : 5) * rotation_matrix';
+    b = primitive(6 : 8) * rotation_matrix' + shift_vector;
+    rmajor = primitive(9);
+    rminor = primitive(10);
+    pproj = points - repmat(dot(points - repmat(b, m, 1), repmat(a, m, 1), 2), 1, 3) .* repmat(a, m, 1);
+    e = pproj - repmat(b, m, 1);
+    e = e ./ repmat(sqrt(sum(e .^ 2, 2)), 1, 3);
+    r = repmat(b, m, 1) + rmajor * e;
+    d = sqrt(sum((points - r) .^ 2, 2));
+    projectedNormals = (points - r) ./ repmat(d, 1, 3);
+    rho = d - rminor;
+    projection = points - repmat(rho, 1, 3) .* projectedNormals;
+    projection = (projection - repmat(shift_vector, m, 1)) * rotation_matrix;
+    projectedNormals = projectedNormals * rotation_matrix;
+end

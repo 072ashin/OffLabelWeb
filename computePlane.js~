@@ -1,0 +1,97 @@
+// computePlane() : initial estimate of plane
+// labelPlane()   : region growing that provides centroids for fitting
+// labelFitPlane(): region growing that provides final answer
+function computePlane(){
+	var front = 0;
+	var rear = faceArray.size();
+	for(var j = 0;j < rear;j++){
+		visited[faceArray.get(0).index] = 1;
+	}
+	var u1 = faceArray.get(front);
+	p0 = u1.centroid;
+	n0 = u1.normal;
+	result = {para1:p0, para2:n0, para3:100.0, geoType:0};
+}
+
+function labelPlane(p0, n0){
+	var front = 0;
+	var rear = faceArray.size();
+	while(front < rear)
+	{
+		var tempKey;
+		var tempVal;
+		var u = faceArray.get(front);
+		front = front+1;
+		tempKey = u.index;
+		tempVal = scene.children[3].NeighborMap[tempKey];
+		for(var i = 0;i < tempVal.length;i++)
+		{
+			var v = faceAll.get(tempVal[i]*2);
+			var p = v.centroid;
+			var n = v.normal;
+			var tempP = new THREE.Vector3();
+			tempP.subVectors(p, p0);
+			var difP = tempP.dot(n0);
+			var difN = n.dot(n0);
+			if( visited[tempVal[i]]!=1 && difP<delta0 && difN>delta1 )
+			{
+				rear = rear + 1;
+				faceArray.add(faceAll.get(tempVal[i]*2));
+				visited[tempVal[i]] = 1;
+			}
+		}
+	}
+	// keep centorids info in array, pass it to php
+	var rgFacesInx = [];
+	for(var j = 0;j<faceArray.size();j++){
+		var faceIndex = faceArray.get(j).index*2;
+		var faceCentroid = faceAll.get(faceIndex).centroid;
+		rgFacesInx.push([faceCentroid.x, faceCentroid.y, faceCentroid.z]);
+	}
+	return rgFacesInx;
+}
+
+function labelFitPlane(p0, n0)
+{
+	// keep 
+	var tmpFaceArray = new ArrayList();
+	for(var j = 0;j < 1; j++)
+	{
+		tmpFaceArray.add(faceArray.get(j));
+	}
+	faceArray.clear();
+	visited = [];
+	faceArray = tmpFaceArray;
+	var front = 0;
+	var rear = faceArray.size();
+	while(front < rear)
+	{
+		var tempKey;
+		var tempVal;
+		var u = faceArray.get(front);
+		front = front+1;
+		tempKey = u.index;
+		tempVal = scene.children[3].NeighborMap[tempKey];
+		for(var i = 0;i < tempVal.length;i++)
+		{
+			var v = faceAll.get(tempVal[i]*2);
+			var p = v.centroid;
+			var n = v.normal;
+			var tempP = new THREE.Vector3();
+			tempP.subVectors(p, p0);
+			var difP = tempP.dot(n0);
+			var difN = n.dot(n0);
+			if( visited[tempVal[i]]!=1 && difP<delta0 && difN>delta1 )
+			{
+				rear = rear + 1;
+				faceArray.add(faceAll.get(tempVal[i]*2));
+				visited[tempVal[i]] = 1;
+			}
+		}
+	}
+	// render the final result in certain color
+	for(var j = 0;j<faceArray.size();j++){
+		var faceIndex = faceArray.get(j).index*2;
+		scene.children[3].children[faceIndex].material.color = new THREE.Color(0x6a5acd);
+	}
+}

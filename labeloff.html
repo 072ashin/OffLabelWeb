@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - loaders - OFF loader</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				font-family: Monospace;
+				background-color: #000;
+				color: #fff;
+				margin: 0px;
+				overflow: hidden;
+			}
+			#info {
+				color: #fff;
+				position: absolute;
+				top: 1%;
+				left: 1%;
+				display:block;
+			}
+			#functional {
+				color: #fff;
+				position: absolute;
+				top:1%;
+				left: 80%;
+				display:block;
+			}
+			.functional_button_style{
+				position: relative;
+				height: 25px;
+				width:150px;
+				display:block;
+			}
+			#selected_color{
+				position: relative;
+				height: 25px;
+				width:150px;
+				display:block;
+			}
+			#primitive {
+				color: #fff;
+				position: absolute;
+				top:1%;
+				left: 30%;
+				text-align: center;
+				z-index: 100;
+				display:block;
+			}
+			.primitive_button_style{
+				position: relative;
+				left:1%;
+				height: 25px;
+				width:150px;
+			}
+			#overlay {
+			    position:absolute;
+			    top:0;
+			    left:0;
+			    width:100%;
+			    height:100%;
+			    z-index:1000;
+			    background-color: rgba(0, 0, 0, 0.5);
+			    opacity:0;
+			    display:none;
+			}
+			#container {
+			    position:absolute;
+			    top:30%;
+			    left:50%;
+			    margin-left:-200px;
+			    width: 400px;
+			    height:250px;
+			    background-color:#111;
+			    padding:5px;
+			    border-radius:4px;
+			    color:#FFF;
+			}
+			#info a, .button { color: #f00; font-weight: bold; text-decoration: underline; cursor: pointer }
+		</style>
+	</head>
+
+	<body>
+		<div id="overlay" style="opacity:0">
+			<div id="container">
+				<h1>Waiting for responces...</h1>
+			</div>
+		</div> 
+
+		<div id="info">
+			Open Off File:<br>
+			<input id="off-file-input" type="file" placeholder="Choose .OFF File" onchange="readOff(this.files)"/>
+			<button id="load" disabled="true" onclick="loadoff(this.id);">Start Label</button>
+			<br>Open Label File:<br>
+			<input id="label-file-input" disabled="true" type="file" placeholder="Choose label File" name="name" onchange="readLabel(this.files)" />
+			<br>Export Label and Primitive Files:<br>
+			<button onclick="exportLabel();">Export Label</button>	
+		</div>
+
+		<div id="primitive">
+			<button id="plane" disabled="true" class="primitive_button_style" onclick="plane();">Plane</button>
+			<button id="cylinder" disabled="true" class="primitive_button_style" onclick="cylinder();">Cylinder</button>
+			<button id="cone" disabled="true" class="primitive_button_style" onclick="cone();">Cone</button>
+			<button id="sphere" disabled="true" class="primitive_button_style" onclick="sphere();">Sphere</button>
+		</div>
+		<div id="functional">
+			Clear Current Selection<br>
+			<button class="functional_button_style" onclick="clearface();">Clear Selection</button>
+			<br>Change Label of Selected Faces<br>
+			<button class="functional_button_style" onclick="freestyle();">Change Label</button>	
+			<select id="selected_color">
+				<option  style="background: white;">Select Color</option>
+			</select>
+			<br>Undo Selection<br>
+			<button id="confirm" disabled="true" class="functional_button_style" onclick="undoLabel();">Undo Label</button>
+		</div>
+		<script src="//cdn.bootcss.com/jquery/3.1.1/jquery.js"></script>
+		
+		<script src="http://stemkoski.github.io/Three.js/js/THREEx.KeyboardState.js"></script>	
+
+		<script src="js/three/build/three.js"></script>
+		<script src="http://stemkoski.github.io/Three.js/js/OrbitControls.js"></script>
+		<script src="js/OFFLoader.js"></script>
+		<script src="js/three/examples/js/Detector.js"></script>
+		<script src="js/three/examples/js/libs/stats.min.js"></script>
+		<script src="js/ArrayList.js"></script>
+		<script src="js/FileSaver.js" type = "text/javascript"></script>
+
+		<script src="init.js" type="text/javascript"></script>
+		<script src="computePlane.js" type="text/javascript"></script>
+		<script src="computeClinder.js" type="text/javascript"></script>
+		<script src="computeCone.js" type="text/javascript"></script>
+		<script src="computeSphere.js" type="text/javascript"></script>
+		<script src="clearAndFreestyle.js" type="text/javascript"></script>
+		<script src="confirmLabel.js" type="text/javascript"></script>
+		<script src="undoLabel.js" type="text/javascript"></script>
+		<script src="exportLabel.js" type="text/javascript"></script>
+		<script src="loadLabel.js" type="text/javascript"></script>
+		<script>
+			
+			var container, stats;
+
+			var camera, scene, renderer;
+
+			var controls;
+
+			var mouse;
+			var keyboard = new THREEx.KeyboardState();
+
+			var windowHalfX = window.innerWidth / 2;
+			var windowHalfY = window.innerHeight / 2;
+
+			var geometry;
+
+			// two thresholds to define if this triangle belongs to this primitive
+			var distThreshold = 0.01;
+			var normThreshold = 0.95;
+			
+			// all the triangles(including gray frame)
+			var faceAll = new ArrayList();
+			// the user pick triangles, and the result of fitting
+			var faceArray = new ArrayList();
+			var totalFaceNum = faceAll.size();
+			// visited triangles' index while region growing
+			var visited = new Array(totalFaceNum);
+
+			
+			// track the labeling info
+			var primitiveMap = new ArrayList();
+			var colorArray;
+			var colorCount = 1;
+			// speicified the primitive type
+			var geoTypeEnum = Object.freeze({"0":"plane", "1":"cylinder", "2":"cone", "3":"sphere"});
+			var geoTypeEnumPy = Object.freeze({"0":"plane", "1":"sphere", "2":"cylinder", "3":"cone"});
+
+			var offFileName;
+			var selectObj = document.getElementById('selected_color'); 
+
+			var originalColor= new THREE.Color(0xf8f8ff);
+			var selectedColor= new THREE.Color(0x585858);
+
+			function setBlockingWindow(){			
+				document.getElementById('overlay').style.opacity = 0.5;
+				document.getElementById('overlay').style.display = "block";
+			}
+
+			function failedToEstimate() {
+				clearface();
+				alert("Initial Estimate Failed");
+				document.getElementById('overlay').style.display = "none";				
+			}
+
+			function failedToFit() {
+				clearface();
+				alert("Fitting Failed");
+				document.getElementById('overlay').style.display = "none";	
+			}
+
+			function plane(){
+				console.log("plane");
+				setBlockingWindow();
+				result = computePlane();
+				var p0 = result["para1"];
+				var n0 = result["para2"];
+				var rgFacesInx = labelPlane(p0, n0);
+				if(rgFacesInx.length > 2) {
+					var arrToMatlab = getParamtersArray();
+					primitiveFitting(JSON.stringify(arrToMatlab), JSON.stringify(rgFacesInx));
+				} else if(rgFacesInx.length < 3) {
+					result = computeExceptPlane();
+					p0 = result["para1"];
+					n0 = result["para2"];
+					rgFacesIdx = labelFitPlane(p0, n0);
+					confirmLabel(geoTypeEnum["0"], p0, n0, 100, rgFacesIdx);
+					document.getElementById('overlay').style.display = "none";
+					document.getElementById("confirm").disabled = false;
+				} else {
+					failedToEstimate();
+				}
+
+			}
+
+			function cylinder(){
+				console.log("cylinder");
+				setBlockingWindow();
+				result = computeCylinder();
+				var p0 = result["para1"];
+				var n0 = result["para2"];
+				var r = result["para3"];
+				var rgFacesInx = labelClinder(n0, p0, r);
+				if(rgFacesInx.length > 2) {
+					var arrToMatlab = getParamtersArray();
+					primitiveFitting(JSON.stringify(arrToMatlab), JSON.stringify(rgFacesInx));
+				} else {
+					failedToEstimate();
+				}
+			}
+
+			function cone(){
+				console.log("cone");
+				setBlockingWindow();
+				result = computeCone();
+				var axis = result["para1"];
+				var apex = result["para2"];
+				var angle = result["para3"];
+				var rgFacesInx = labelCone(axis, apex, angle);
+				if(rgFacesInx.length > 3) {
+					var arrToMatlab = getParamtersArray();
+					primitiveFitting(JSON.stringify(arrToMatlab), JSON.stringify(rgFacesInx));
+				} else {
+					failedToEstimate();
+				}
+			}
+
+			function sphere(){
+				console.log("sphere");
+				setBlockingWindow();
+				result = computeSphere();
+				var p = result["para1"];
+				var r = result["para3"];
+				rgFacesInx = labelSphere(p, r);
+				console.log(rgFacesInx.length);
+				if(rgFacesInx.length > 15) {
+					var arrToMatlab = getParamtersArray();
+					primitiveFitting(JSON.stringify(arrToMatlab), JSON.stringify(rgFacesInx));
+				} else {
+					failedToEstimate();
+				}
+			}
+
+			function getParamtersArray(){
+				var arrToMatlab = [result["para1"].x, result["para1"].y, result["para1"].z, result["para2"].x, result["para2"].y, result["para2"].z];
+				arrToMatlab = arrToMatlab.concat(result["para3"], result["geoType"]);
+				return arrToMatlab;
+			}
+	
+			function primitiveFitting(arr1, arr2){
+				$.ajax({
+				   type: "POST",
+	               url: "receiveInitialEstimate.php",
+	               data: {"parameters": arr1, "centroids": arr2},
+	               success: function(data){
+	               		console.log("python result: "+data);
+	               		data = $.parseJSON(data);
+	               		if(data.length != 0) {
+	               			t = data[0].split(',');
+	               			document.getElementById('overlay').style.display = "none";
+		               		switch(parseInt(t[0]))
+		               		{
+		               			case 0:
+									var p0 = new THREE.Vector3(parseFloat(t[2]), parseFloat(t[3]), parseFloat(t[4]));
+									var n0 = new THREE.Vector3(parseFloat(t[5]), parseFloat(t[6]), parseFloat(t[7]));
+									var rgFaces = labelFitPlane(p0, n0);
+									if(rgFaces.size() > 1) {
+										confirmLabel(geoTypeEnum["0"], p0, n0, 100, rgFaces);
+									} else {
+										failedToFit();
+									}
+		               				break;
+		               			case 1:
+									var p0 = new THREE.Vector3(parseFloat(t[2]), parseFloat(t[3]), parseFloat(t[4]));
+									var r = parseFloat(t[5]);
+									var rgFaces = labelFitSphere(p0, r);
+									if(rgFaces.size() > 15) {
+										confirmLabel(geoTypeEnum["3"], p0, r, 100, rgFaces);
+									} else {
+										failedToFit();
+									}
+									break;
+		               			case 2:
+									var n0 = new THREE.Vector3(parseFloat(t[2]), parseFloat(t[3]), parseFloat(t[4]));
+									var p0 = new THREE.Vector3(parseFloat(t[5]), parseFloat(t[6]), parseFloat(t[7]));
+									var r = parseFloat(t[8]);
+									var rgFaces = labelFitClinder(n0, p0, r);
+									if(rgFaces.size() > 2) {
+										confirmLabel(geoTypeEnum["1"], p0, n0, r, rgFaces);
+									} else {
+										failedToFit();
+									}
+									break;
+		               			case 3:
+									var axis = new THREE.Vector3(parseFloat(t[2]), parseFloat(t[3]), parseFloat(t[4]));
+									var apex = new THREE.Vector3(parseFloat(t[5]), parseFloat(t[6]), parseFloat(t[7]));
+									var angle = parseFloat(t[8]);
+									var rgFaces = labelFitCone(axis, apex, angle);
+									if(rgFaces.size() > 3) {
+										confirmLabel(geoTypeEnum["2"], axis, apex, angle, rgFaces);
+									} else {
+										failedToFit();
+									}
+									break;
+		               		}
+	               		} else if(data.length == 0){
+	               			alert("fail to fit!");
+	               			clearface();
+	               			document.getElementById('overlay').style.display = "none";
+	               		}
+	               }
+				});
+			}
+	       	// upload off file to server
+       		function uploadOffFile(arr1, arr2){
+	           $.ajax({
+	               type: "POST",
+	               url: "receiveOff.php",
+	               data: {"off": arr1, "offFileName":arr2},
+	               success: function (data){      		
+	               		offFilePath = data;
+	               		document.getElementById('overlay').style.display = "none";
+	            	}
+            	});
+	       	}
+	       	
+		</script>
+	</body>
+</html>
